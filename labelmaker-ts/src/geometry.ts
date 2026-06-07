@@ -2,6 +2,47 @@ import { VECTORS, charIndex } from './font.js'
 import type { Calibration, CharPlan, LinePlan, Move, StrokePlan } from './types.js'
 import { DEFAULT_CALIBRATION } from './types.js'
 
+// rx and ry are in physical X-step-equivalent units; rx===ry gives a round circle.
+// yGear is applied internally so the caller thinks in physical dimensions.
+export function planEllipse(
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  segments = 36,
+  calOverrides?: Partial<Calibration>,
+): Move[] {
+  const cal = mergeCalibration(calOverrides)
+  const yMax = 4 * cal.yScale * cal.yGear
+  const yExtent = ry * cal.yGear
+
+  if (cx - rx < 0)
+    throw new RangeError(`Ellipse reaches x=${cx - rx} but x must be >= 0`)
+  if (Math.round(cy - yExtent) < 0)
+    throw new RangeError(`Ellipse reaches y=${Math.round(cy - yExtent)} but y must be >= 0`)
+  if (Math.round(cy + yExtent) > Math.round(yMax))
+    throw new RangeError(`Ellipse reaches y=${Math.round(cy + yExtent)} but tape height is ${Math.round(yMax)}`)
+
+  const moves: Move[] = []
+  for (let i = 0; i <= segments; i++) {
+    const θ = (2 * Math.PI * i) / segments
+    const x = Math.round(cx + rx * Math.cos(θ))
+    const y = Math.round(cy + ry * cal.yGear * Math.sin(θ))
+    moves.push({ kind: 'goto', x, y, draw: i > 0 })
+  }
+  return moves
+}
+
+export function planCircle(
+  cx: number,
+  cy: number,
+  r: number,
+  segments = 36,
+  calOverrides?: Partial<Calibration>,
+): Move[] {
+  return planEllipse(cx, cy, r, r, segments, calOverrides)
+}
+
 function mergeCalibration(overrides?: Partial<Calibration>): Calibration {
   return { ...DEFAULT_CALIBRATION, ...overrides }
 }

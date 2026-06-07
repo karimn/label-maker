@@ -1,7 +1,11 @@
 import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
+import { DEFAULT_CALIBRATION } from './types.js';
 const READY_TIMEOUT_MS = 20_000;
 const CMD_TIMEOUT_MS = 5_000;
+const X_MIN = 0;
+const Y_MIN = 0;
+const Y_MAX = Math.round(4 * DEFAULT_CALIBRATION.yScale * DEFAULT_CALIBRATION.yGear);
 export class LabelMakerDriver {
     port;
     parser;
@@ -63,7 +67,14 @@ export class LabelMakerDriver {
         });
     }
     async goto(x, y, draw) {
-        await this.cmd(`G ${Math.round(x)} ${Math.round(y)} ${draw ? 1 : 0}`);
+        const rx = Math.round(x), ry = Math.round(y);
+        if (rx < X_MIN)
+            throw new RangeError(`x=${rx} is below minimum ${X_MIN}`);
+        if (ry < Y_MIN)
+            throw new RangeError(`y=${ry} is below minimum ${Y_MIN}`);
+        if (ry > Y_MAX)
+            throw new RangeError(`y=${ry} exceeds tape height ${Y_MAX}`);
+        await this.cmd(`G ${rx} ${ry} ${draw ? 1 : 0}`);
     }
     async penDown() { await this.cmd('PD'); }
     async penUp() { await this.cmd('PU'); }
