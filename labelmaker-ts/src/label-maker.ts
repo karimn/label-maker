@@ -20,6 +20,8 @@ export class LabelMaker {
   disconnect(): Promise<void> { return this.driver.disconnect() }
   home(): Promise<void> { return this.driver.home() }
   release(): Promise<void> { return this.driver.release() }
+  setSpeedX(rpm: number): Promise<void> { return this.driver.cmd(`SX ${rpm}`).then(() => {}) }
+  setSpeedY(rpm: number): Promise<void> { return this.driver.cmd(`SY ${rpm}`).then(() => {}) }
 
   printText(text: string, options?: PrintOptions): Promise<void> {
     return this.printLines([text], options)
