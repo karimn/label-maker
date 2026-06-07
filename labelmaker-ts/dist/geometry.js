@@ -1,5 +1,29 @@
 import { VECTORS, charIndex } from './font.js';
 import { DEFAULT_CALIBRATION } from './types.js';
+// rx and ry are in physical X-step-equivalent units; rx===ry gives a round circle.
+// yGear is applied internally so the caller thinks in physical dimensions.
+export function planEllipse(cx, cy, rx, ry, segments = 36, calOverrides) {
+    const cal = mergeCalibration(calOverrides);
+    const yMax = 4 * cal.yScale * cal.yGear;
+    const yExtent = ry * cal.yGear;
+    if (cx - rx < 0)
+        throw new RangeError(`Ellipse reaches x=${cx - rx} but x must be >= 0`);
+    if (Math.round(cy - yExtent) < 0)
+        throw new RangeError(`Ellipse reaches y=${Math.round(cy - yExtent)} but y must be >= 0`);
+    if (Math.round(cy + yExtent) > Math.round(yMax))
+        throw new RangeError(`Ellipse reaches y=${Math.round(cy + yExtent)} but tape height is ${Math.round(yMax)}`);
+    const moves = [];
+    for (let i = 0; i <= segments; i++) {
+        const θ = (2 * Math.PI * i) / segments;
+        const x = Math.round(cx + rx * Math.cos(θ));
+        const y = Math.round(cy + ry * cal.yGear * Math.sin(θ));
+        moves.push({ kind: 'goto', x, y, draw: i > 0 });
+    }
+    return moves;
+}
+export function planCircle(cx, cy, r, segments = 36, calOverrides) {
+    return planEllipse(cx, cy, r, r, segments, calOverrides);
+}
 function mergeCalibration(overrides) {
     return { ...DEFAULT_CALIBRATION, ...overrides };
 }

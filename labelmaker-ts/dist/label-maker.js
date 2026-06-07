@@ -1,5 +1,5 @@
 import { LabelMakerDriver } from './driver.js';
-import { planLines } from './geometry.js';
+import { planLines, planEllipse } from './geometry.js';
 import { DEFAULT_CALIBRATION } from './types.js';
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -17,6 +17,18 @@ export class LabelMaker {
     release() { return this.driver.release(); }
     setSpeedX(rpm) { return this.driver.cmd(`SX ${rpm}`).then(() => { }); }
     setSpeedY(rpm) { return this.driver.cmd(`SY ${rpm}`).then(() => { }); }
+    async printCircle(cx, cy, r, segments = 36) {
+        return this.printEllipse(cx, cy, r, r, segments);
+    }
+    async printEllipse(cx, cy, rx, ry, segments = 36) {
+        const moves = planEllipse(cx, cy, rx, ry, segments, this.calibration);
+        for (const move of moves) {
+            if (move.kind === 'goto') {
+                await this.driver.goto(move.x, move.y, move.draw);
+            }
+        }
+        await this.driver.release();
+    }
     printText(text, options) {
         return this.printLines([text], options);
     }

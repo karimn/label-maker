@@ -18,6 +18,9 @@ boolean pPenOnPaper = false;
 
 const int stepCount = 200;
 
+// Full tape height in Y steps: 4 grid units * yScale(230) * yGear(3.501)
+const long Y_MAX = 3221;
+
 void setup() {
   Serial.begin(9600);
 
@@ -46,8 +49,12 @@ void loop() {
       long x = cmd.substring(2, s1).toInt();
       long y = cmd.substring(s1 + 1, s2).toInt();
       int draw = cmd.substring(s2 + 1).toInt();
-      line(x, y, draw);
-      Serial.println("OK");
+      if (x < 0 || y < 0 || y > Y_MAX) {
+        Serial.println("ERR");
+      } else {
+        line(x, y, draw);
+        Serial.println("OK");
+      }
     } else if (cmd == "PU") {
       penUp();
       Serial.println("OK");

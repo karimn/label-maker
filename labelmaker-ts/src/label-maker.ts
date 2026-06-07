@@ -1,5 +1,5 @@
 import { LabelMakerDriver } from './driver.js'
-import { planLines } from './geometry.js'
+import { planLines, planCircle, planEllipse } from './geometry.js'
 import { DEFAULT_CALIBRATION } from './types.js'
 import type { Calibration, PrintOptions } from './types.js'
 
@@ -22,6 +22,20 @@ export class LabelMaker {
   release(): Promise<void> { return this.driver.release() }
   setSpeedX(rpm: number): Promise<void> { return this.driver.cmd(`SX ${rpm}`).then(() => {}) }
   setSpeedY(rpm: number): Promise<void> { return this.driver.cmd(`SY ${rpm}`).then(() => {}) }
+
+  async printCircle(cx: number, cy: number, r: number, segments = 36): Promise<void> {
+    return this.printEllipse(cx, cy, r, r, segments)
+  }
+
+  async printEllipse(cx: number, cy: number, rx: number, ry: number, segments = 36): Promise<void> {
+    const moves = planEllipse(cx, cy, rx, ry, segments, this.calibration)
+    for (const move of moves) {
+      if (move.kind === 'goto') {
+        await this.driver.goto(move.x, move.y, move.draw)
+      }
+    }
+    await this.driver.release()
+  }
 
   printText(text: string, options?: PrintOptions): Promise<void> {
     return this.printLines([text], options)

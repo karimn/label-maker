@@ -9,6 +9,8 @@ export declare class LabelMaker {
     release(): Promise<void>;
     setSpeedX(rpm: number): Promise<void>;
     setSpeedY(rpm: number): Promise<void>;
+    printCircle(cx: number, cy: number, r: number, segments?: number): Promise<void>;
+    printEllipse(cx: number, cy: number, rx: number, ry: number, segments?: number): Promise<void>;
     printText(text: string, options?: PrintOptions): Promise<void>;
     printLines(lines: string[], options?: PrintOptions): Promise<void>;
 }
