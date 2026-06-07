@@ -7,6 +7,7 @@ const CMD_TIMEOUT_MS = 5_000
 export class LabelMakerDriver {
   private port: SerialPort
   private parser: ReadlineParser
+  private queue: Promise<unknown> = Promise.resolve()
 
   constructor(portPath = '/dev/ttyUSB0', baud = 9600) {
     this.port = new SerialPort({ path: portPath, baudRate: baud, autoOpen: false })
@@ -39,6 +40,12 @@ export class LabelMakerDriver {
   }
 
   async cmd(text: string): Promise<string> {
+    const result = this.queue.then(() => this._sendCmd(text))
+    this.queue = result.catch(() => {})
+    return result
+  }
+
+  private _sendCmd(text: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.parser.off('data', handler)
