@@ -1,7 +1,7 @@
 import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
 const READY_TIMEOUT_MS = 20_000;
-const CMD_TIMEOUT_MS = 5_000;
+const CMD_TIMEOUT_MS = 30_000;
 export class LabelMakerDriver {
     port;
     parser;

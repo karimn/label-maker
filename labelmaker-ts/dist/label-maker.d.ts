@@ -7,6 +7,8 @@ export declare class LabelMaker {
     disconnect(): Promise<void>;
     home(): Promise<void>;
     release(): Promise<void>;
+    setSpeedX(rpm: number): Promise<void>;
+    setSpeedY(rpm: number): Promise<void>;
     printText(text: string, options?: PrintOptions): Promise<void>;
     printLines(lines: string[], options?: PrintOptions): Promise<void>;
 }

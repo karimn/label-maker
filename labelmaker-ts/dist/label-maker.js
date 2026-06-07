@@ -15,6 +15,8 @@ export class LabelMaker {
     disconnect() { return this.driver.disconnect(); }
     home() { return this.driver.home(); }
     release() { return this.driver.release(); }
+    setSpeedX(rpm) { return this.driver.cmd(`SX ${rpm}`).then(() => { }); }
+    setSpeedY(rpm) { return this.driver.cmd(`SY ${rpm}`).then(() => { }); }
     printText(text, options) {
         return this.printLines([text], options);
     }
