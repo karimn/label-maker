@@ -20,6 +20,79 @@ A bundled `arduino-cli` binary lives at `bin/arduino-cli`. No build config is co
 
 There are no automated tests — validation requires flashing to an Arduino Uno and observing hardware behavior.
 
+## TypeScript Backend (`labelmaker-ts/`)
+
+The active computer-side driver. Replaces `labelmaker.py`. A typed Node.js ESM module — pure geometry layer + serial driver.
+
+### Install
+```bash
+cd labelmaker-ts && bun install
+```
+
+### Build
+```bash
+cd labelmaker-ts && bun run build   # runs tsc → emits dist/
+```
+
+### Run (hardware)
+
+**Use `node`, not `bun`** — `serialport` uses libuv NAPI functions that Bun doesn't support yet.
+
+```bash
+cd labelmaker-ts && node --input-type=module <<'EOF'
+import { LabelMaker } from './dist/index.js'
+const lm = new LabelMaker()          // defaults: /dev/ttyUSB0, 9600 baud
+await lm.connect()
+await lm.printLines(['LINE ONE', 'LINE TWO'])
+await lm.disconnect()
+EOF
+```
+
+With progress callbacks:
+```bash
+cd labelmaker-ts && node --input-type=module <<'EOF'
+import { LabelMaker } from './dist/index.js'
+const lm = new LabelMaker()
+await lm.connect()
+await lm.printLines(['HELLO', 'WORLD'], {
+  onProgress: e => {
+    if (e.type === 'char') process.stdout.write(e.char)
+    if (e.type === 'done') console.log('\nDone.')
+  }
+})
+await lm.disconnect()
+EOF
+```
+
+### Preview geometry (no hardware)
+```bash
+cd labelmaker-ts && bun -e "
+import { planLines } from './src/geometry.ts'
+console.log(JSON.stringify(planLines(['HELLO']), null, 2))
+"
+```
+
+### Key gotchas
+
+- **`node` for hardware, `bun` for everything else.** Bun crashes on `serialport` (libuv `uv_default_loop` not yet supported).
+- **Always rebuild before running:** `bun run build` then run from `dist/`.
+- **Long Y moves (line rewinds) take >5s** — `CMD_TIMEOUT_MS` is set to 30s to accommodate full tape-height travel.
+- **Arduino resets on serial connect** (DTR toggle), re-homing Y (~7s). `connect()` waits for `READY` with a 20s timeout.
+- **`printLines` parks the carriage** at the end of the longest line after printing. Next `printLines` call should start from there (X is not reset between calls).
+
+### Module structure
+
+| File | Role |
+|---|---|
+| `src/types.ts` | Shared types + `DEFAULT_CALIBRATION` (xScale=131, yScale=230, yGear=3.501) |
+| `src/font.ts` | `VECTORS[63]` stroke data + `charIndex()` |
+| `src/geometry.ts` | Pure functions: `planText`, `planLines` → `StrokePlan` |
+| `src/driver.ts` | `LabelMakerDriver` — serial, promise-queued commands |
+| `src/label-maker.ts` | `LabelMaker` — public API |
+| `src/index.ts` | Re-exports |
+
+---
+
 ## Project Overview
 
 Two sketches coexist:

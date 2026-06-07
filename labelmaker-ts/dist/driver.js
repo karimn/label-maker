@@ -2,7 +2,7 @@ import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
 import { DEFAULT_CALIBRATION } from './types.js';
 const READY_TIMEOUT_MS = 20_000;
-const CMD_TIMEOUT_MS = 5_000;
+const CMD_TIMEOUT_MS = 30_000;
 const X_MIN = 0;
 const Y_MIN = 0;
 const Y_MAX = Math.round(4 * DEFAULT_CALIBRATION.yScale * DEFAULT_CALIBRATION.yGear);
