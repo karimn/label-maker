@@ -24,7 +24,7 @@ BAUD = 9600
 # the X drive wheel. The stock firmware assumed 3.5; we are verifying that.
 X_SCALE = 131  # calibrated: 230 gave 0.875w vs 0.5h; 230*(0.5/0.875)=131 -> square
 Y_SCALE = 230
-Y_GEAR = 3.89  # ~1.25in tall (4*230*3.89=3578 steps @ 0.00035in/step); 0.5in wide
+Y_GEAR = 3.501  # ~1.125in tall (4*230*3.501=3221 steps @ 0.00035in/step); 0.5in wide
 
 
 class LabelMaker:
