@@ -179,8 +179,10 @@ def plot_dot(lm, x, y):
     lm.cmd("PU", echo=False)
 
 
-def plot_char(lm, c, x_origin, y_origin=0):
+def plot_char(lm, c, x_origin, y_origin=0, y_gear=None):
     """Render one character at the given step origin. Returns x advance."""
+    if y_gear is None:
+        y_gear = Y_GEAR
     idx = char_index(c)
     strokes = VECTORS[idx]
     cur_x, cur_y = x_origin, y_origin
@@ -193,7 +195,7 @@ def plot_char(lm, c, x_origin, y_origin=0):
             v -= 100
         cx, cy = divmod(v, 10)
         cur_x = x_origin + cx * X_SCALE
-        cur_y = y_origin + round(cy * Y_SCALE * Y_GEAR)
+        cur_y = y_origin + round(cy * Y_SCALE * y_gear)
         lm.goto(cur_x, cur_y, draw)
     # advance, with the stock firmware's per-character kerning tweaks
     adv = SPACE
@@ -204,7 +206,7 @@ def plot_char(lm, c, x_origin, y_origin=0):
     return adv
 
 
-def plot_text(lm, text, x_start=0, y=0):
+def plot_text(lm, text, x_start=0, y_origin=0, y_gear=None):
     print(f"\nPlotting {text!r}")
     x = x_start
     for c in text:
@@ -212,18 +214,47 @@ def plot_text(lm, text, x_start=0, y=0):
             x += SPACE
             continue
         print(f"  char {c!r}")
-        x += plot_char(lm, c, x, y)
-    # Park the carriage one gap past the last letter (pen up) so the next
-    # print starts on fresh tape. A reset re-homes Y but not X, so this
-    # rightward offset persists into the following print.
-    lm.goto(x, 0, 0)
+        x += plot_char(lm, c, x, y_origin, y_gear=y_gear)
+    return x  # return final x so callers can park or chain lines
+
+
+def plot_lines(lm, lines, x_start=0, gap=200):
+    """Print multiple lines stacked vertically on the same tape section.
+    Each line gets an equal share of the full height minus inter-line gaps.
+    Lines are ordered top-to-bottom. X rewinds between lines; park is at
+    the end of the longest line.
+
+    gap: Y-step gap between adjacent lines (default ~0.04 in).
+    """
+    n = len(lines)
+    total_h = round(4 * Y_SCALE * Y_GEAR)
+    total_gap = gap * (n - 1)
+    line_h = (total_h - total_gap) // n
+    line_y_gear = line_h / (4 * Y_SCALE)
+    max_x = x_start
+
+    for i, text in enumerate(lines):
+        # Bottom line starts at 0; each line above is offset by line_h + gap
+        y_origin = (n - 1 - i) * (line_h + gap)
+        print(f"\nLine {i + 1}/{n}: {text!r}  (y_origin={y_origin}, line_h={line_h})")
+        x = plot_text(lm, text, x_start=x_start, y_origin=y_origin, y_gear=line_y_gear)
+        max_x = max(max_x, x)
+        if i < n - 1:
+            lm.goto(x_start, 0, 0)  # rewind X for next line
+
+    lm.goto(max_x, 0, 0)  # park past the longest line
     lm.release()
 
 
 if __name__ == "__main__":
     import sys
-    text = sys.argv[1] if len(sys.argv) > 1 else "AZ8I.!"
-    lm = LabelMaker()
-    plot_text(lm, text)
+    if len(sys.argv) > 1:
+        lm = LabelMaker()
+        plot_text(lm, sys.argv[1])
+        lm.goto(0, 0, 0)
+        lm.release()
+    else:
+        lm = LabelMaker()
+        plot_lines(lm, ["HAPPY BIRTHDAY,", "KALINDA!"])
     lm.close()
     print("Done.")

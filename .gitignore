@@ -1,1 +1,16 @@
 __pycache__/
+.vscode/
+.idea/
+.bash_profile
+.bashrc
+.gitconfig
+.gitmodules
+.profile
+.ripgreprc
+.zprofile
+.zshrc
+.bash_profile
+.mcp.json
+.claude/
+docs/
+labelmaker-ts/node_modules/
