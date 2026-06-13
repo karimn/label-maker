@@ -24,6 +24,8 @@ export class LabelMakerDriver {
       this.port.open(err => (err ? reject(err) : resolve()))
     })
     await this.waitReady()
+    const id = await this.cmd('ID')
+    if (id !== 'LABELMAKER') throw new Error(`Unexpected device ID: "${id}" (expected "LABELMAKER")`)
   }
 
   private waitReady(): Promise<void> {

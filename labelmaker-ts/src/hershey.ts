@@ -9,12 +9,14 @@ type HersheyGlyphRaw = { d: string; o: string }
 type HersheyFontEntry = { name: string; chars: HersheyGlyphRaw[] }
 
 // Parse an SVG mini-path "M x,y L x1,y1 x2,y2 ..." into stroke arrays.
-// Coordinates are translated so that baseline=0 and capHeight=4 (Y is flipped).
+// xScale and yScale may differ: yScale uses the full y range (no descender clipping),
+// xScale uses the cap height (correct proportional character width).
 function parsePath(
   d: string,
   o: number,
-  baseline: number,
-  scale: number,
+  bottom: number,
+  xScale: number,
+  yScale: number,
 ): { strokes: Point[][]; advance: number } {
   const strokes: Point[][] = []
   let current: Point[] = []
@@ -26,35 +28,57 @@ function parsePath(
     if (type === 'M') {
       if (current.length > 0) { strokes.push(current); current = [] }
       if (nums.length >= 2) {
-        current.push({ x: nums[0] * scale, y: (baseline - nums[1]) * scale })
+        current.push({ x: nums[0] * xScale, y: (bottom - nums[1]) * yScale })
       }
     } else if (type === 'L') {
       for (let i = 0; i + 1 < nums.length; i += 2) {
-        current.push({ x: nums[i] * scale, y: (baseline - nums[i + 1]) * scale })
+        current.push({ x: nums[i] * xScale, y: (bottom - nums[i + 1]) * yScale })
       }
     }
   }
   if (current.length > 0) strokes.push(current)
 
-  // Advance = 2*o (right bearing doubled from center), scaled to grid units.
-  const advance = 2 * o * scale
+  // Advance based on x scale (cap height) for correct proportional spacing.
+  const advance = 2 * o * xScale
   return { strokes, advance }
 }
 
-// Scan uppercase A–Z glyphs (indices 32–57) to find the font's cap-height parameters.
-function detectCapParams(chars: HersheyGlyphRaw[]): { baseline: number; capHeight: number } {
-  let minY = Infinity
-  let maxY = -Infinity
-  for (let i = 32; i <= 57; i++) {
-    const ch = chars[i]
-    if (!ch?.d) continue
-    const nums = ch.d.replace(/[ML]/g, ' ').split(/[\s,]+/).map(Number)
-    for (let j = 0; j + 1 < nums.length; j += 2) {
-      const y = nums[j + 1]
-      if (isFinite(y)) { if (y < minY) minY = y; if (y > maxY) maxY = y }
+// Scan letter/digit glyphs for vertical extent.
+// capHeight uses min(maxY per uppercase letter) as the baseline — robust against
+// gothic letters like P/Q/Y whose strokes extend below the true baseline.
+function detectYRange(chars: HersheyGlyphRaw[]): { top: number; bottom: number; capHeight: number } {
+  // ASCII indices for: A-Z (32-57), a-z (64-89), 0-9 (15-24)
+  const letterRanges = [[15, 24], [32, 57], [64, 89]]
+  let top = Infinity, bottom = -Infinity
+  let capTop = Infinity
+  const upperMaxYs: number[] = []
+
+  for (const [lo, hi] of letterRanges) {
+    const isUpper = lo === 32
+    for (let idx = lo; idx <= hi; idx++) {
+      const ch = chars[idx]
+      if (!ch?.d) continue
+      let glyphMaxY = -Infinity
+      for (const token of ch.d.trim().split(/(?=[ML])/)) {
+        const nums = token.slice(1).trim().split(/[\s,]+/).map(Number)
+        for (let i = 0; i + 1 < nums.length; i += 2) {
+          const y = nums[i + 1]
+          if (!isFinite(y)) continue
+          if (y < top) top = y
+          if (y > bottom) bottom = y
+          if (isUpper) {
+            if (y < capTop) capTop = y
+            if (y > glyphMaxY) glyphMaxY = y
+          }
+        }
+      }
+      if (isUpper && glyphMaxY > -Infinity) upperMaxYs.push(glyphMaxY)
     }
   }
-  return { baseline: maxY, capHeight: maxY - minY }
+  // baseline = min(maxY per uppercase glyph): the lowest point ALL caps reach,
+  // ignoring sub-baseline flourishes on P/Q/Y etc.
+  const baseline = Math.min(...upperMaxYs)
+  return { top, bottom, capHeight: baseline - capTop }
 }
 
 export function hersheyFont(name: string): Font {
@@ -62,11 +86,13 @@ export function hersheyFont(name: string): Font {
   if (!entry) throw new Error(`Unknown Hershey font "${name}". Available: ${hersheyFonts().join(', ')}`)
 
   const chars = entry.chars
-  const { baseline, capHeight } = detectCapParams(chars)
-  const scale = 4 / capHeight  // maps capHeight glyph units → 4 grid units
+  const { top, bottom, capHeight } = detectYRange(chars)
+  // yScale: full range keeps descenders inside tape (no clipping)
+  // xScale: cap height gives correct proportional character width
+  const yScale = 4 / (bottom - top)
+  const xScale = 4 / capHeight
 
-  // Space advance: use the font's default horiz-adv-x (10 units), normalized
-  const spaceAdvance = 2 * 10 * scale
+  const spaceAdvance = 2 * 10 * xScale
 
   const glyphCache = new Map<string, GlyphData>()
 
@@ -83,7 +109,7 @@ export function hersheyFont(name: string): Font {
       result = { strokes: [], advance: spaceAdvance }
     } else {
       const o = parseInt(raw.o, 10)
-      result = parsePath(raw.d, o, baseline, scale)
+      result = parsePath(raw.d, o, bottom, xScale, yScale)
     }
 
     glyphCache.set(c, result)

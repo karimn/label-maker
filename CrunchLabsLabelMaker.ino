@@ -75,6 +75,8 @@ void loop() {
     } else if (cmd.startsWith("SY ")) {
       yStepper.setSpeed(cmd.substring(3).toInt());
       Serial.println("OK");
+    } else if (cmd == "ID") {
+      Serial.println("LABELMAKER");
     } else {
       Serial.println("ERR");
     }
