@@ -1,5 +1,5 @@
-import { VECTORS, charIndex } from './font.js'
-import type { Calibration, CharPlan, LinePlan, Move, StrokePlan } from './types.js'
+import { builtinFont } from './font.js'
+import type { Calibration, CharPlan, Font, LinePlan, Move, StrokePlan } from './types.js'
 import { DEFAULT_CALIBRATION } from './types.js'
 
 // rx and ry are in physical X-step-equivalent units; rx===ry gives a round circle.
@@ -47,32 +47,26 @@ function mergeCalibration(overrides?: Partial<Calibration>): Calibration {
   return { ...DEFAULT_CALIBRATION, ...overrides }
 }
 
-function planChar(c: string, xOrigin: number, yOrigin: number, cal: Calibration): { moves: Move[]; advance: number } {
-  const strokes = VECTORS[charIndex(c)]
+function planChar(c: string, xOrigin: number, yOrigin: number, cal: Calibration, font: Font): { moves: Move[]; advance: number } {
+  const { strokes, advance: advanceUnits } = font.glyph(c)
   const moves: Move[] = []
-  let curX = xOrigin
-  let curY = yOrigin
 
-  for (const v of strokes) {
-    if (v === 222) {
-      moves.push({ kind: 'dot', x: curX, y: curY })
+  for (const stroke of strokes) {
+    if (stroke.length === 1) {
+      // Single-point stroke = dot
+      const px = xOrigin + Math.round(stroke[0].x * cal.xScale)
+      const py = yOrigin + Math.round(stroke[0].y * cal.yScale * cal.yGear)
+      moves.push({ kind: 'dot', x: px, y: py })
       continue
     }
-    const draw = v >= 100
-    const coord = draw ? v - 100 : v
-    const cx = Math.floor(coord / 10)
-    const cy = coord % 10
-    curX = xOrigin + cx * cal.xScale
-    curY = yOrigin + Math.round(cy * cal.yScale * cal.yGear)
-    moves.push({ kind: 'goto', x: curX, y: curY, draw })
+    for (let i = 0; i < stroke.length; i++) {
+      const px = xOrigin + Math.round(stroke[i].x * cal.xScale)
+      const py = yOrigin + Math.round(stroke[i].y * cal.yScale * cal.yGear)
+      moves.push({ kind: 'goto', x: px, y: py, draw: i > 0 })
+    }
   }
 
-  const space = cal.xScale * 5
-  let advance = space
-  if (c === 'I' || c === 'i') advance -= (cal.xScale * 4) / 1.1
-  else if (c === ',') advance -= (cal.xScale * 4) / 1.2
-
-  return { moves, advance }
+  return { moves, advance: Math.round(advanceUnits * cal.xScale) }
 }
 
 export function planText(
@@ -80,14 +74,15 @@ export function planText(
   cal: Calibration,
   xStart = 0,
   yOrigin = 0,
+  font: Font = builtinFont(),
 ): { chars: CharPlan[]; finalX: number } {
-  const space = cal.xScale * 5
+  const space = Math.round(font.spaceAdvance * cal.xScale)
   const chars: CharPlan[] = []
   let x = xStart
 
   for (const c of text) {
     if (c === ' ') { x += space; continue }
-    const { moves, advance } = planChar(c, x, yOrigin, cal)
+    const { moves, advance } = planChar(c, x, yOrigin, cal, font)
     chars.push({ char: c, moves })
     x += advance
   }
@@ -100,6 +95,7 @@ export function planLines(
   calOverrides?: Partial<Calibration>,
   xStart = 0,
   gap = 200,
+  font: Font = builtinFont(),
 ): StrokePlan {
   const cal = mergeCalibration(calOverrides)
   const n = lines.length
@@ -112,7 +108,7 @@ export function planLines(
   const linePlans: LinePlan[] = lines.map((text, i) => {
     // Line 0 (first in array) is topmost; y increases downward toward tape edge.
     const yOrigin = (n - 1 - i) * (lineH + gap)
-    const { chars, finalX } = planText(text, lineCal, xStart, yOrigin)
+    const { chars, finalX } = planText(text, lineCal, xStart, yOrigin, font)
     return { text, yOrigin, chars, finalX }
   })
 
