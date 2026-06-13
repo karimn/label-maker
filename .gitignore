@@ -12,5 +12,6 @@ __pycache__/
 .bash_profile
 .mcp.json
 .claude/
+!.claude/skills/
 docs/
 labelmaker-ts/node_modules/
