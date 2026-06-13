@@ -1,4 +1,5 @@
 import { LabelMakerDriver } from './driver.js';
+import { builtinFont } from './font.js';
 import { planLines, planEllipse } from './geometry.js';
 import { DEFAULT_CALIBRATION } from './types.js';
 function sleep(ms) {
@@ -7,9 +8,11 @@ function sleep(ms) {
 export class LabelMaker {
     driver;
     calibration;
-    constructor(port = '/dev/ttyUSB0', baud = 9600, calibration) {
+    font;
+    constructor(port = '/dev/ttyUSB0', baud = 9600, calibration, font) {
         this.driver = new LabelMakerDriver(port, baud);
         this.calibration = { ...DEFAULT_CALIBRATION, ...calibration };
+        this.font = font ?? builtinFont();
     }
     connect() { return this.driver.connect(); }
     disconnect() { return this.driver.disconnect(); }
@@ -35,7 +38,7 @@ export class LabelMaker {
     async printLines(lines, options) {
         const cal = { ...this.calibration, ...options?.calibration };
         const gap = options?.lineGap ?? 200;
-        const plan = planLines(lines, cal, 0, gap);
+        const plan = planLines(lines, cal, 0, gap, this.font);
         const lineCount = plan.lines.length;
         const maxX = Math.max(...plan.lines.map(l => l.finalX));
         for (let li = 0; li < plan.lines.length; li++) {

@@ -1,3 +1,15 @@
+export type Point = { x: number; y: number }
+
+// A glyph's stroke data in normalized 0–4 grid coordinates (0=baseline, 4=cap height).
+// First point of each stroke = pen-up move; subsequent points = pen-down draws.
+export type GlyphData = { strokes: Point[][]; advance: number }
+
+// Font provider: resolves a character to its normalized glyph data.
+export type Font = {
+  glyph: (char: string) => GlyphData
+  spaceAdvance: number  // space character advance in 0–4 grid units
+}
+
 export type Calibration = {
   xScale: number  // steps per grid unit on X (grid coords 0..4)
   yScale: number  // steps per grid unit on Y

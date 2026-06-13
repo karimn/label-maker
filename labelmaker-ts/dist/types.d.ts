@@ -1,3 +1,15 @@
+export type Point = {
+    x: number;
+    y: number;
+};
+export type GlyphData = {
+    strokes: Point[][];
+    advance: number;
+};
+export type Font = {
+    glyph: (char: string) => GlyphData;
+    spaceAdvance: number;
+};
 export type Calibration = {
     xScale: number;
     yScale: number;

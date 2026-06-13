@@ -1,8 +1,9 @@
-import type { Calibration, PrintOptions } from './types.js';
+import type { Calibration, Font, PrintOptions } from './types.js';
 export declare class LabelMaker {
     private driver;
     private calibration;
-    constructor(port?: string, baud?: number, calibration?: Partial<Calibration>);
+    private font;
+    constructor(port?: string, baud?: number, calibration?: Partial<Calibration>, font?: Font);
     connect(): Promise<void>;
     disconnect(): Promise<void>;
     home(): Promise<void>;

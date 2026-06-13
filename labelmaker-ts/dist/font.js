@@ -85,3 +85,44 @@ export function charIndex(c) {
         return o - 22; // 0-9 → 26-35
     return CHAR_MAP[c] ?? 38; // default: '/'
 }
+// Decodes the compact integer encoding to GlyphData in normalized 0–4 grid coords.
+function decodeGlyph(c) {
+    const vecs = VECTORS[charIndex(c)];
+    const strokes = [];
+    let current = [];
+    let curPt = { x: 0, y: 0 };
+    for (const v of vecs) {
+        if (v === 222) {
+            // Dot at current pen position; discard positioning moves in current.
+            const dotPos = current.length > 0 ? current[current.length - 1] : curPt;
+            current = [];
+            strokes.push([{ ...dotPos }]);
+            continue;
+        }
+        const draw = v >= 100;
+        const coord = draw ? v - 100 : v;
+        const pt = { x: Math.floor(coord / 10), y: coord % 10 };
+        curPt = pt;
+        if (!draw && current.length > 0) {
+            strokes.push(current);
+            current = [];
+        }
+        current.push(pt);
+    }
+    if (current.length > 0)
+        strokes.push(current);
+    // narrow-char advance corrections mirror the old planChar special-cases
+    let advance = 5;
+    if (c === 'I' || c === 'i')
+        advance = 5 - 4 / 1.1;
+    else if (c === ',')
+        advance = 5 - 4 / 1.2;
+    return { strokes, advance };
+}
+// Built-in 5×5 stroke font wrapped as a Font provider.
+export function builtinFont() {
+    return {
+        glyph: decodeGlyph,
+        spaceAdvance: 5,
+    };
+}

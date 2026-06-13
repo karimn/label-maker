@@ -1,3 +1,5 @@
+import type { Font, GlyphData, Point } from './types.js'
+
 // Stroke data for 63 characters on a 0..4 grid.
 // Each number encodes one move:
 //   >= 100 → pen-down (draw); subtract 100 for coord
@@ -83,4 +85,44 @@ export function charIndex(c: string): number {
   if (o >= 97 && o <= 122) return o - 97  // a-z → 0-25
   if (o >= 48 && o <= 57) return o - 22   // 0-9 → 26-35
   return CHAR_MAP[c] ?? 38                // default: '/'
+}
+
+// Decodes the compact integer encoding to GlyphData in normalized 0–4 grid coords.
+function decodeGlyph(c: string): GlyphData {
+  const vecs = VECTORS[charIndex(c)]
+  const strokes: Point[][] = []
+  let current: Point[] = []
+  let curPt: Point = { x: 0, y: 0 }
+
+  for (const v of vecs) {
+    if (v === 222) {
+      // Dot at current pen position; discard positioning moves in current.
+      const dotPos = current.length > 0 ? current[current.length - 1] : curPt
+      current = []
+      strokes.push([{ ...dotPos }])
+      continue
+    }
+    const draw = v >= 100
+    const coord = draw ? v - 100 : v
+    const pt: Point = { x: Math.floor(coord / 10), y: coord % 10 }
+    curPt = pt
+    if (!draw && current.length > 0) { strokes.push(current); current = [] }
+    current.push(pt)
+  }
+  if (current.length > 0) strokes.push(current)
+
+  // narrow-char advance corrections mirror the old planChar special-cases
+  let advance = 5
+  if (c === 'I' || c === 'i') advance = 5 - 4 / 1.1
+  else if (c === ',') advance = 5 - 4 / 1.2
+
+  return { strokes, advance }
+}
+
+// Built-in 5×5 stroke font wrapped as a Font provider.
+export function builtinFont(): Font {
+  return {
+    glyph: decodeGlyph,
+    spaceAdvance: 5,
+  }
 }
