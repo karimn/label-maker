@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Label Maker Font Editor</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0 }
+body {
+  font-family: 'Courier New', monospace;
+  background: #0f1117;
+  color: #c9d1d9;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+#editor {
+  width: 440px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  border-right: 1px solid #21262d;
+  overflow-y: auto;
+  gap: 9px;
+}
+#gallery {
+  flex: 1;
+  padding: 14px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.title { font-size: 12px; color: #58a6ff; text-transform: uppercase; letter-spacing: 2px }
+h2 { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #8b949e }
+.mode-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 5px;
+  font-size: 11px;
+}
+.pip { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; transition: background .15s }
+.toolbar { display: flex; gap: 5px; flex-wrap: wrap }
+button {
+  padding: 4px 9px; font-size: 11px; font-family: inherit;
+  background: #21262d; border: 1px solid #30363d; border-radius: 5px;
+  color: #c9d1d9; cursor: pointer; transition: background .1s, border-color .1s;
+}
+button:hover { background: #30363d }
+.btn-lift.armed { background: #1c2a1c; border-color: #56d364; color: #56d364 }
+.btn-clear { border-color: #6e3232 }
+.btn-clear:hover { background: #2a1c1c }
+#grid-svg { background: #161b22; border: 1px solid #21262d; border-radius: 6px; display: block }
+.seq-box {
+  background: #161b22; border: 1px solid #21262d; border-radius: 5px;
+  padding: 7px; min-height: 36px; font-size: 10px; line-height: 1.9; word-break: break-all;
+}
+.chip { display: inline-block; margin: 1px; padding: 1px 5px; border-radius: 3px; font-size: 10px }
+.cm { background: #0d1e40; color: #58a6ff }
+.cd { background: #2a1c00; color: #f0b429 }
+.cp { background: #201030; color: #bb86fc }
+.out-box {
+  background: #161b22; border: 1px solid #21262d; border-radius: 5px;
+  padding: 8px; font-size: 11px; color: #56d364; word-break: break-all;
+  cursor: pointer; user-select: all; transition: border-color .1s;
+}
+.out-box:hover { border-color: #56d364 }
+.hint { font-size: 10px; color: #555 }
+#preview-canvas { border-radius: 4px; display: block }
+.char-grid { display: flex; flex-wrap: wrap; gap: 4px }
+.cc {
+  width: 50px; background: #0d1117; border: 1px solid #21262d; border-radius: 4px;
+  padding: 4px; cursor: pointer; transition: border-color .1s;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.cc:hover { border-color: #444 }
+.cc.sel { border-color: #f0b429 }
+.cc canvas { display: block }
+.cc .cl { font-size: 8px; color: #555 }
+#tooltip {
+  position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
+  background: #21262d; border: 1px solid #30363d; border-radius: 4px;
+  padding: 3px 8px; font-size: 10px; color: #8b949e;
+  pointer-events: none; opacity: 0; transition: opacity .1s;
+}
+#tooltip.show { opacity: 1 }
+</style>
+</head>
+<body>
+
+<div id="editor">
+  <div class="title">Font Editor</div>
+
+  <div class="mode-bar">
+    <div class="pip" id="pip"></div>
+    <span id="mode-text"></span>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-lift" id="btn-lift">Pen Up <kbd>U</kbd></button>
+    <button id="btn-dot">Dot <kbd>D</kbd></button>
+    <button id="btn-undo">Undo <kbd>Z</kbd></button>
+    <button class="btn-clear" id="btn-clear">Clear <kbd>Esc</kbd></button>
+  </div>
+
+  <svg id="grid-svg" width="408" height="408" viewBox="0 0 408 408"></svg>
+
+  <h2>Move sequence</h2>
+  <div class="seq-box" id="seq"></div>
+
+  <h2>Output — click to copy</h2>
+  <div class="out-box" id="out">[]</div>
+  <div class="hint" id="copy-hint">Click to copy to clipboard</div>
+</div>
+
+<div id="gallery">
+  <div class="title">Preview</div>
+  <canvas id="preview-canvas" width="236" height="236"
+    style="background:#161b22;border:1px solid #21262d;border-radius:6px"></canvas>
+
+  <h2>All characters — click to load</h2>
+  <div class="char-grid" id="char-grid"></div>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+// ── Font data (from src/font.ts) ─────────────────────────────────────────────
+const VECTORS = [
+  [0,124,140,32,112],                                          // A
+  [0,104,134,132,2,142,140,100],                               // B
+  [41,130,110,101,103,114,134,143],                            // C
+  [0,104,134,143,141,130,100],                                 // D
+  [40,100,104,144,22,102],                                     // E
+  [0,104,144,22,102],                                          // F
+  [44,104,100,140,142,122],                                    // G
+  [0,104,2,142,44,140],                                        // H
+  [0,104],                                                     // I
+  [1,110,130,141,144],                                         // J
+  [0,104,2,142,140,22,144],                                    // K
+  [40,100,104],                                                // L
+  [0,104,122,144,140],                                         // M
+  [0,104,140,144],                                             // N
+  [10,101,103,114,134,143,141,130,110],                        // O
+  [0,104,144,142,102],                                         // P
+  [0,104,144,142,120,100,22,140],                              // Q
+  [0,104,144,142,102,22,140],                                  // R
+  [0,140,142,102,104,144],                                     // S
+  [20,124,4,144],                                              // T
+  [4,101,110,130,141,144],                                     // U
+  [4,120,144],                                                 // V
+  [4,100,122,140,144],                                         // W
+  [0,144,4,140],                                               // X
+  [4,122,144,22,120],                                          // Y
+  [4,144,100,140],                                             // Z
+  [0,104,134,133,122,142,140,110],                             // 0
+  [0,140,20,124,104],                                          // 1
+  [4,144,142,102,100,140],                                     // 2
+  [0,140,144,104,12,142],                                      // 3
+  [20,123,42,102,104],                                         // 4
+  [0,140,142,102,104,144],                                     // 5
+  [2,142,140,100,104,144],                                     // 6
+  [0,144,104,12,132],                                          // 7
+  [0,140,144,104,100,2,142],                                   // 8
+  [0,140,144,104,102,142],                                     // 9
+  [], [],                                                      // sp sp
+  [0,144],                                                     // /
+  [0,102,124,142,140,42,102,4,103,44,143],                     // Ä
+  [0,102,142,140,100,2,14,113,34,133],                         // Ö
+  [4,100,140,144,14,113,34,133],                               // Ü
+  [0,111],                                                     // ,
+  [2,142],                                                     // -
+  [0,222],                                                     // .
+  [0,222,1,104],                                               // !
+  [20,222,21,122,142,144,104],                                  // ?
+  [0,104,134,133,122,142,140,110],                             // ß
+  [23,124],                                                    // '
+  [42,120,100,101,123,124,104,103,130,140],                    // &
+  [2,142,20,124],                                              // +
+  [21,222,23,222],                                             // :
+  [10,121,22,222],                                             // ;
+  [14,113,33,134],                                             // "
+  [10,114,34,130,41,101,3,143],                                // #
+  [34,124,120,130],                                            // (
+  [10,120,124,114],                                            // )
+  [1,141,43,103],                                              // =
+  [31,133,113,111,141,144,104,100,140],                        // @
+  [2,142,20,124,4,140,0,144],                                  // *
+  [0,140,144,104,100,12,113,33,132,31,111],                    // ☺
+  [0,140,144,104,100,13,222,33,222,32,131,111,112,132],        // ☺₂
+  [20,142,143,134,123,114,103,102,120],                        // ♥
+]
+
+const CHAR_INFO = [
+  'A','B','C','D','E','F','G','H','I','J','K','L','M',
+  'N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
+  '0','1','2','3','4','5','6','7','8','9',
+  'sp','sp','/',
+  'Ä','Ö','Ü',',','-','.','!','?','ß',"'",'&','+',
+  ':',';','"','#','(',')', '=','@','*','☺','☺₂','♥',
+]
+
+// ── Coordinate system ────────────────────────────────────────────────────────
+// Logical: x∈[0,4] left→right, y∈[0,4] where y=0=baseline (bottom), y=4=top
+// Screen: flip y so baseline is at the bottom of the SVG
+const SZ = 408, PAD = 44, STEP = (SZ - PAD * 2) / 4  // STEP = 80
+
+const sx = lx => PAD + lx * STEP
+const sy = ly => SZ - PAD - ly * STEP   // y=0 → near bottom, y=4 → near top
+
+// ── State ────────────────────────────────────────────────────────────────────
+let moves = []        // {x,y,draw:bool} | {dot:true, x,y}
+let nextDraw = false  // true = next grid click draws; false = moves pen
+
+// ── Build SVG grid ───────────────────────────────────────────────────────────
+const NS = 'http://www.w3.org/2000/svg'
+const svgEl = document.getElementById('grid-svg')
+
+function el(tag, attrs) {
+  const e = document.createElementNS(NS, tag)
+  for (const [k,v] of Object.entries(attrs)) e.setAttribute(k, v)
+  return e
+}
+
+function buildGrid() {
+  for (let i = 0; i <= 4; i++) {
+    const isBase = i === 0
+    // Horizontal lines (y=i)
+    svgEl.appendChild(el('line', {
+      x1:sx(0), x2:sx(4), y1:sy(i), y2:sy(i),
+      stroke: isBase ? '#2a4a2a' : '#1e2530',
+      'stroke-width': isBase ? 1.5 : 1,
+    }))
+    // Vertical lines (x=i)
+    svgEl.appendChild(el('line', {
+      x1:sx(i), x2:sx(i), y1:sy(0), y2:sy(4),
+      stroke:'#1e2530', 'stroke-width':1,
+    }))
+    // Y-axis labels
+    const yt = el('text', { x:sx(0)-16, y:sy(i)+4, 'text-anchor':'middle',
+      fill: isBase ? '#3a6a3a' : '#333', 'font-size':10, 'font-family':'monospace' })
+    yt.textContent = i
+    svgEl.appendChild(yt)
+    // X-axis labels
+    const xt = el('text', { x:sx(i), y:sy(0)+18, 'text-anchor':'middle',
+      fill:'#333', 'font-size':10, 'font-family':'monospace' })
+    xt.textContent = i
+    svgEl.appendChild(xt)
+  }
+
+  // "base" label on the right
+  const bl = el('text', { x:sx(4)+22, y:sy(0)+4, 'text-anchor':'middle',
+    fill:'#3a6a3a', 'font-size':9, 'font-family':'monospace' })
+  bl.textContent = 'base'
+  svgEl.appendChild(bl)
+
+  // cap label
+  const cl = el('text', { x:sx(4)+20, y:sy(4)+4, 'text-anchor':'middle',
+    fill:'#333', 'font-size':9, 'font-family':'monospace' })
+  cl.textContent = 'cap'
+  svgEl.appendChild(cl)
+
+  // Stroke layer (dynamic)
+  const sl = el('g', { id:'sl' })
+  svgEl.appendChild(sl)
+
+  // Clickable dots
+  for (let ly = 0; ly <= 4; ly++) {
+    for (let lx = 0; lx <= 4; lx++) {
+      const g = document.createElementNS(NS, 'g')
+      g.style.cursor = 'pointer'
+      g.setAttribute('transform', `translate(${sx(lx)},${sy(ly)})`)
+
+      const hit = el('circle', { r:14, fill:'transparent' })
+      g.appendChild(hit)
+
+      const vis = el('circle', { r:3, fill:'#2a3040' })
+      vis.id = `dv-${lx}-${ly}`
+      g.appendChild(vis)
+
+      g.addEventListener('click', () => handleGridClick(lx, ly))
+      g.addEventListener('mouseenter', () =>
+        showTip(`${nextDraw ? 'draw to' : 'move to'}  (${lx}, ${ly})`))
+      g.addEventListener('mouseleave', hideTip)
+
+      svgEl.appendChild(g)
+    }
+  }
+}
+
+// ── Grid interaction ─────────────────────────────────────────────────────────
+function handleGridClick(lx, ly) {
+  moves.push({ x:lx, y:ly, draw:nextDraw })
+  nextDraw = true
+  refresh()
+}
+
+document.getElementById('btn-lift').addEventListener('click', () => {
+  nextDraw = false; refresh()
+})
+document.getElementById('btn-dot').addEventListener('click', () => {
+  const last = [...moves].reverse().find(m => !m.dot)
+  if (!last) return
+  moves.push({ dot:true, x:last.x, y:last.y })
+  nextDraw = false; refresh()
+})
+document.getElementById('btn-undo').addEventListener('click', () => {
+  if (!moves.length) return
+  moves.pop()
+  nextDraw = moves.length === 0 ? false : (moves[moves.length-1].dot ? false : true)
+  refresh()
+})
+document.getElementById('btn-clear').addEventListener('click', () => {
+  moves = []; nextDraw = false; refresh()
+})
+document.getElementById('out').addEventListener('click', () => {
+  navigator.clipboard.writeText(document.getElementById('out').textContent).then(() => {
+    const h = document.getElementById('copy-hint')
+    h.textContent = '✓ copied to clipboard'; h.style.color = '#56d364'
+    setTimeout(() => { h.textContent = 'Click to copy to clipboard'; h.style.color = '' }, 1800)
+  })
+})
+
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input,textarea')) return
+  if (e.key === 'u' || e.key === 'U') { document.getElementById('btn-lift').click() }
+  else if (e.key === 'd' || e.key === 'D') { document.getElementById('btn-dot').click() }
+  else if (e.key.toLowerCase() === 'z' && !e.shiftKey) { document.getElementById('btn-undo').click(); e.preventDefault() }
+  else if (e.key === 'Escape') { document.getElementById('btn-clear').click() }
+})
+
+// ── Decode helpers ───────────────────────────────────────────────────────────
+// Converts integer VECTORS array to {pts:[{x,y}], dot:bool}[] strokes
+function decodeVecs(vecs) {
+  const strokes = []; let cur = []; let curPt = {x:0,y:0}
+  for (const v of vecs) {
+    if (v === 222) {
+      const dp = cur.length ? {...cur[cur.length-1]} : {...curPt}
+      if (cur.length) { strokes.push({pts:[...cur], dot:false}); cur = [] }
+      strokes.push({pts:[dp], dot:true})
+      continue
+    }
+    const draw = v >= 100, coord = draw ? v-100 : v
+    const pt = {x:Math.floor(coord/10), y:coord%10}
+    curPt = pt
+    if (!draw && cur.length) { strokes.push({pts:[...cur], dot:false}); cur = [] }
+    cur.push(pt)
+  }
+  if (cur.length) strokes.push({pts:[...cur], dot:false})
+  return strokes
+}
+
+// Converts editor moves[] to the same stroke format
+function decodeMoves(moves) {
+  const strokes = []; let cur = []
+  for (const m of moves) {
+    if (m.dot) {
+      if (cur.length) { strokes.push({pts:[...cur], dot:false}); cur = [] }
+      strokes.push({pts:[{x:m.x,y:m.y}], dot:true})
+      continue
+    }
+    if (!m.draw && cur.length) { strokes.push({pts:[...cur], dot:false}); cur = [] }
+    cur.push({x:m.x, y:m.y})
+  }
+  if (cur.length) strokes.push({pts:[...cur], dot:false})
+  return strokes
+}
+
+// ── Grid rendering ───────────────────────────────────────────────────────────
+function renderGrid() {
+  const sl = document.getElementById('sl')
+  sl.innerHTML = ''
+
+  const strokes = decodeMoves(moves)
+
+  // Pen-up travel (dashed blue)
+  let prevEnd = null
+  for (const s of strokes) {
+    const start = s.pts[0]
+    if (prevEnd && (prevEnd.x !== start.x || prevEnd.y !== start.y)) {
+      sl.appendChild(el('line', {
+        x1:sx(prevEnd.x), y1:sy(prevEnd.y), x2:sx(start.x), y2:sy(start.y),
+        stroke:'#1a3558', 'stroke-width':1.5, 'stroke-dasharray':'5,4',
+      }))
+    }
+    prevEnd = s.pts[s.pts.length-1]
+  }
+
+  // Draw strokes
+  for (const s of strokes) {
+    if (s.dot) {
+      sl.appendChild(el('circle', {
+        cx:sx(s.pts[0].x), cy:sy(s.pts[0].y), r:5, fill:'#f0b429',
+      }))
+    } else if (s.pts.length >= 2) {
+      const poly = el('polyline', {
+        points: s.pts.map(p => `${sx(p.x)},${sy(p.y)}`).join(' '),
+        stroke:'#f0b429', 'stroke-width':2.5, fill:'none',
+        'stroke-linecap':'round', 'stroke-linejoin':'round',
+      })
+      sl.appendChild(poly)
+      sl.appendChild(el('circle', {
+        cx:sx(s.pts[0].x), cy:sy(s.pts[0].y), r:3.5, fill:'#56d364',
+      }))
+    } else {
+      // lone move-to: open circle
+      sl.appendChild(el('circle', {
+        cx:sx(s.pts[0].x), cy:sy(s.pts[0].y),
+        r:4.5, fill:'none', stroke:'#56d364', 'stroke-width':1.5,
+      }))
+    }
+  }
+
+  // Highlight used dot positions
+  const used = new Set(moves.filter(m => !m.dot).map(m => `${m.x}-${m.y}`))
+  for (let ly = 0; ly <= 4; ly++) {
+    for (let lx = 0; lx <= 4; lx++) {
+      const dv = document.getElementById(`dv-${lx}-${ly}`)
+      if (!dv) continue
+      const hit = used.has(`${lx}-${ly}`)
+      dv.setAttribute('fill', hit ? '#f0b429' : '#2a3040')
+      dv.setAttribute('r', hit ? 4 : 3)
+    }
+  }
+}
+
+// ── Canvas drawing ───────────────────────────────────────────────────────────
+// Draws strokes onto a canvas ctx. ox/oy = origin offset, scale = px per grid unit.
+// Y is flipped: screen_y = oy + (4 - logical_y) * scale
+function drawStrokes(ctx, strokes, ox, oy, scale, color) {
+  ctx.strokeStyle = color; ctx.fillStyle = color
+  ctx.lineWidth = Math.max(1.5, scale * 0.07)
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+  for (const s of strokes) {
+    if (s.dot) {
+      ctx.beginPath()
+      ctx.arc(ox + s.pts[0].x * scale, oy + (4 - s.pts[0].y) * scale,
+              Math.max(2, scale * 0.07), 0, Math.PI*2)
+      ctx.fill()
+    } else if (s.pts.length >= 2) {
+      ctx.beginPath()
+      ctx.moveTo(ox + s.pts[0].x * scale, oy + (4 - s.pts[0].y) * scale)
+      for (let i = 1; i < s.pts.length; i++) {
+        ctx.lineTo(ox + s.pts[i].x * scale, oy + (4 - s.pts[i].y) * scale)
+      }
+      ctx.stroke()
+    }
+  }
+}
+
+function renderPreview() {
+  const canvas = document.getElementById('preview-canvas')
+  const ctx = canvas.getContext('2d')
+  ctx.clearRect(0, 0, 236, 236)
+  ctx.fillStyle = '#161b22'; ctx.fillRect(0, 0, 236, 236)
+
+  const scale = 42, ox = 20, oy = 20
+
+  // Grid dots
+  ctx.fillStyle = '#21262d'
+  for (let ly = 0; ly <= 4; ly++) {
+    for (let lx = 0; lx <= 4; lx++) {
+      ctx.beginPath()
+      ctx.arc(ox + lx*scale, oy + (4-ly)*scale, 1.5, 0, Math.PI*2)
+      ctx.fill()
+    }
+  }
+  // Baseline
+  ctx.strokeStyle = '#2a4a2a'; ctx.lineWidth = 1; ctx.setLineDash([4,4])
+  ctx.beginPath()
+  ctx.moveTo(ox, oy + 4*scale); ctx.lineTo(ox + 4*scale, oy + 4*scale)
+  ctx.stroke(); ctx.setLineDash([])
+
+  drawStrokes(ctx, decodeMoves(moves), ox, oy, scale, '#f0b429')
+}
+
+// ── Sequence + output ────────────────────────────────────────────────────────
+function renderSeq() {
+  const el = document.getElementById('seq')
+  if (!moves.length) {
+    el.innerHTML = '<span style="color:#333">empty — click grid to start</span>'; return
+  }
+  el.innerHTML = moves.map(m => {
+    if (m.dot) return '<span class="chip cp">• dot</span>'
+    return `<span class="chip ${m.draw?'cd':'cm'}">${m.draw?'▶':'↑'}(${m.x},${m.y})</span>`
+  }).join('')
+}
+
+function renderOutput() {
+  const seq = moves.map(m => {
+    if (m.dot) return 222
+    const coord = m.x*10 + m.y
+    return m.draw ? 100+coord : coord
+  })
+  document.getElementById('out').textContent = '[' + seq.join(', ') + ']'
+}
+
+function renderMode() {
+  const pip = document.getElementById('pip')
+  const txt = document.getElementById('mode-text')
+  const liftBtn = document.getElementById('btn-lift')
+  pip.style.background = nextDraw ? '#f0b429' : '#58a6ff'
+  txt.textContent = nextDraw
+    ? 'Drawing — click to extend stroke'
+    : 'Pen up — next click moves without drawing'
+  liftBtn.classList.toggle('armed', !nextDraw)
+}
+
+// ── Gallery ──────────────────────────────────────────────────────────────────
+function buildGallery() {
+  const grid = document.getElementById('char-grid')
+  CHAR_INFO.forEach((label, idx) => {
+    const card = document.createElement('div')
+    card.className = 'cc'; card.title = `idx ${idx}: ${label}`; card.dataset.idx = idx
+
+    const canvas = document.createElement('canvas')
+    canvas.width = 42; canvas.height = 42
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, 42, 42)
+    drawStrokes(ctx, decodeVecs(VECTORS[idx] || []), 5, 5, 8, '#56d364')
+
+    const lbl = document.createElement('div')
+    lbl.className = 'cl'; lbl.textContent = label
+
+    card.appendChild(canvas); card.appendChild(lbl)
+    card.addEventListener('click', () => loadChar(idx))
+    grid.appendChild(card)
+  })
+}
+
+function loadChar(idx) {
+  const vecs = VECTORS[idx] || []
+  moves = []
+  for (const v of vecs) {
+    if (v === 222) {
+      const last = [...moves].reverse().find(m => !m.dot)
+      if (last) moves.push({ dot:true, x:last.x, y:last.y })
+      continue
+    }
+    const draw = v >= 100, coord = draw ? v-100 : v
+    moves.push({ x:Math.floor(coord/10), y:coord%10, draw })
+  }
+  nextDraw = moves.length === 0 ? false : (moves[moves.length-1].dot ? false : true)
+  document.querySelectorAll('.cc').forEach(c => c.classList.remove('sel'))
+  document.querySelector(`.cc[data-idx="${idx}"]`)?.classList.add('sel')
+  refresh()
+}
+
+// ── Tooltip ──────────────────────────────────────────────────────────────────
+function showTip(t) { const el = document.getElementById('tooltip'); el.textContent = t; el.classList.add('show') }
+function hideTip()  { document.getElementById('tooltip').classList.remove('show') }
+
+// ── Master refresh ───────────────────────────────────────────────────────────
+function refresh() {
+  renderGrid(); renderSeq(); renderOutput(); renderMode(); renderPreview()
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+buildGrid()
+buildGallery()
+refresh()
+</script>
+</body>
+</html>
